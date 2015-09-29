@@ -120,7 +120,7 @@ public class Signer {
 //      - SignedInfo - внутри информация о том, что подписывалось и как
 //      - Reference - информация об одном элементе, который подписывается (таких тэгов может быть несколько). 
 //        Аттрибут URI содержит ссылку на id эелемента, который подписывается. Reference внутри себя содержит:
-//              - Tranforms - методы каноникализации подписываемого элемента (приведение xml к каноническому методу). Их можно задать несколько, они подряд будут применяться
+//              - Tranforms - методы каноникализации подписываемого элемента (приведение xml к каноническому виду). Их можно задать несколько, они подряд будут применяться
 //              - DigestMethod - указывается метод вычисления хэша элемента, который будет подписываться, после трансформации
 //              - DigestValue - хэш элемента
 //      - CanonicalizationMethod - метод каноникализации для элемента SignedInfo
@@ -228,13 +228,14 @@ public class Signer {
             keyE.removeChild(chl.item(i));
         }
 
-        // Блок KeyInfo содержит указание на проверку подписи с помощью сертификата SenderCertificate.
+        // Блок KeyInfo содержит указание на проверку подписи с помощью сертификата из BinarySecurityToken.
         Node str = keyE.appendChild(doc.createElementNS("http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd",
                 "wsse:SecurityTokenReference"));
         Element strRef = (Element) str.appendChild(doc.createElementNS("http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd",
                 "wsse:Reference"));
 
         strRef.setAttribute("ValueType", "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3");
+        //Указываем на BinarySecurityToken
         strRef.setAttribute("URI", "#" + preparedSignInfo.getCertId());
         header.getSecurityHeader().appendChild(sigE);
 
@@ -367,6 +368,16 @@ public class Signer {
         String actor = getActor(cooperationType, isResponse);
         //в остальных в общем нам не важно найти новый или создать (на всякий случай создаем)
         Element smevHeader = (Element) XPathAPI.selectSingleNode(securityHeader, "//smev:Header[@actor='" + actor + "']", doc.createElementNS(CURRENT_SMEV_URI, "smev:Header"));
+
+        //Возможно (очень даже возможно) что не указаны атрибуты actor в смэв заголовках. Тогда попробуем найти заголовок, в котором nodeId=78
+        if (smevHeader == null) {
+            smevHeader = (Element) XPathAPI.selectSingleNode(securityHeader, "//smev:Header/smev:NodeId[.=47]", doc.createElementNS(CURRENT_SMEV_URI, "smev:Header"));
+            if (smevHeader != null) {
+                //Это мы нашли тэг NodeId, нам нужен его родитель
+                smevHeader = (Element) smevHeader.getParentNode();
+            }
+        }
+
         if (smevHeader == null) {
             smevHeader = doc.createElementNS(CURRENT_SMEV_URI, "smev:Header");
             smevHeader.setAttribute("actor", actor);
@@ -374,7 +385,7 @@ public class Signer {
             securityHeader.getParentNode().appendChild(smevHeader);
 
             Element nodeId = doc.createElementNS(CURRENT_SMEV_URI, "smev:NodeId");
-            nodeId.setTextContent("78");
+            nodeId.setTextContent("47");
             smevHeader.appendChild(nodeId);
 
             Node requestId = XPathAPI.selectSingleNode(doc.getFirstChild(), "//*[local-name()='OriginRequestIdRef']");
